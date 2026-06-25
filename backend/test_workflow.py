@@ -126,5 +126,111 @@ class TestNudgeWorkflow(unittest.TestCase):
         self.assertEqual(db_draft.status, "rejected")
         db.close()
 
+class TestLLMFallback(unittest.TestCase):
+    def setUp(self):
+        # Store original env vars
+        self.orig_gemini_key = os.environ.get("GEMINI_API_KEY")
+        self.orig_groq_key = os.environ.get("GROQ_API_KEY")
+        if "GEMINI_API_KEY" in os.environ:
+            del os.environ["GEMINI_API_KEY"]
+        if "GROQ_API_KEY" in os.environ:
+            del os.environ["GROQ_API_KEY"]
+
+    def tearDown(self):
+        # Restore env vars
+        if self.orig_gemini_key is not None:
+            os.environ["GEMINI_API_KEY"] = self.orig_gemini_key
+        elif "GEMINI_API_KEY" in os.environ:
+            del os.environ["GEMINI_API_KEY"]
+
+        if self.orig_groq_key is not None:
+            os.environ["GROQ_API_KEY"] = self.orig_groq_key
+        elif "GROQ_API_KEY" in os.environ:
+            del os.environ["GROQ_API_KEY"]
+
+    @patch("services.llm.requests.post")
+    def test_gemini_success(self, mock_post):
+        os.environ["GEMINI_API_KEY"] = "dummy_gemini"
+        
+        # Mock Gemini response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {"text": '{"severity": "HIGH", "reasoning": "Due to high amount"}'}
+                        ]
+                    }
+                }
+            ]
+        }
+        mock_post.return_value = mock_response
+
+        from services.llm import classify_severity
+        invoice_data = {"amount": 1000, "days_overdue": 30}
+        result = classify_severity(invoice_data)
+        
+        self.assertEqual(result.severity, "HIGH")
+        self.assertEqual(result.reasoning, "Due to high amount")
+        mock_post.assert_called_once()
+
+    @patch("services.llm.requests.post")
+    @patch("services.llm.Groq")
+    def test_gemini_fail_groq_fallback(self, mock_groq_class, mock_post):
+        os.environ["GEMINI_API_KEY"] = "dummy_gemini"
+        os.environ["GROQ_API_KEY"] = "dummy_groq"
+
+        # Mock Gemini request failing
+        mock_post.side_effect = Exception("Connection Timeout")
+
+        # Mock Groq client and response
+        mock_groq_client = MagicMock()
+        mock_groq_class.return_value = mock_groq_client
+        
+        mock_message = MagicMock()
+        mock_message.content = '{"severity": "MEDIUM", "reasoning": "Fallback reason"}'
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_completion = MagicMock()
+        mock_completion.choices = [mock_choice]
+        mock_groq_client.chat.completions.create.return_value = mock_completion
+
+        from services.llm import classify_severity
+        invoice_data = {"amount": 500, "days_overdue": 10}
+        result = classify_severity(invoice_data)
+
+        self.assertEqual(result.severity, "MEDIUM")
+        self.assertEqual(result.reasoning, "Fallback reason")
+        mock_post.assert_called_once()
+        mock_groq_class.assert_called_once_with(api_key="dummy_groq")
+
+    @patch("services.llm.Groq")
+    def test_gemini_missing_groq_direct(self, mock_groq_class):
+        # Gemini key is not set
+        os.environ["GROQ_API_KEY"] = "dummy_groq"
+
+        # Mock Groq client and response
+        mock_groq_client = MagicMock()
+        mock_groq_class.return_value = mock_groq_client
+        
+        mock_message = MagicMock()
+        mock_message.content = '{"severity": "LOW", "reasoning": "No gemini key"}'
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_completion = MagicMock()
+        mock_completion.choices = [mock_choice]
+        mock_groq_client.chat.completions.create.return_value = mock_completion
+
+        from services.llm import classify_severity
+        invoice_data = {"amount": 100, "days_overdue": 5}
+        result = classify_severity(invoice_data)
+
+        self.assertEqual(result.severity, "LOW")
+        self.assertEqual(result.reasoning, "No gemini key")
+        mock_groq_class.assert_called_once_with(api_key="dummy_groq")
+
 if __name__ == "__main__":
+    from unittest.mock import MagicMock
     unittest.main()
