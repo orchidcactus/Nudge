@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import engine, get_db, Base
 from models import Invoice, EmailDraft
@@ -15,6 +16,14 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Nudge API")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.post("/invoices", response_model=schemas.InvoiceResponse)
 def create_invoice(invoice: schemas.InvoiceCreate, db: Session = Depends(get_db)):
     db_invoice = Invoice(**invoice.dict())
@@ -22,6 +31,10 @@ def create_invoice(invoice: schemas.InvoiceCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(db_invoice)
     return db_invoice
+
+@app.get("/invoices", response_model=list[schemas.InvoiceResponse])
+def get_invoices(db: Session = Depends(get_db)):
+    return db.query(Invoice).order_by(Invoice.created_at.desc()).all()
 
 @app.post("/run-pipeline/{invoice_id}")
 def run_pipeline(invoice_id: str, db: Session = Depends(get_db)):

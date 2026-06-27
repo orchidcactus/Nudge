@@ -1,0 +1,27 @@
+# Nudge Frontend-Backend Integration Tasks (Milestone-based)
+
+- `[ ]` **Milestone 1: Configure CORS, Service Layer & Dashboard Load**
+  - `[x]` Configure CORS in FastAPI backend (`backend/main.py`)
+  - `[x]` Add `GET /invoices` in `backend/main.py`
+  - `[x]` Create shared type definitions in `frontend/src/types/index.ts` matching backend models
+  - `[ ]` Create `.env` in `frontend/` with `VITE_API_URL=http://localhost:8000`
+  - `[ ]` Create `frontend/src/services/api.ts` (base API fetch client)
+  - `[ ]` Create `frontend/src/services/invoices.ts` (service functions for invoices)
+  - `[ ]` Connect `frontend/src/pages/Dashboard.jsx` to `getInvoices()` with loading & error states
+  - `[ ]` Verify invoices load successfully (Milestone 1 complete)
+- `[ ]` **Milestone 2: Implement Invoice Creation**
+  - `[ ]` Connect "New Invoice" modal form in `Dashboard.jsx` to call `createInvoice(data)`
+  - `[ ]` Verify new invoices persist in backend database and appear in Dashboard (Milestone 2 complete)
+- `[ ]` **Milestone 3: Connect AI Pipeline Action**
+  - `[ ]` Add a "Run Pipeline" button to `Dashboard.jsx` for pending invoices
+  - `[ ]` Wire the button to call `runPipeline(invoiceId)` from the service layer
+  - `[ ]` Verify the status transitions to `processed` correctly (Milestone 3 complete)
+- `[ ]` **Milestone 4: Connect Review Queue & Actions**
+  - `[ ]` Create `frontend/src/services/emails.ts` (service functions for drafts/emails)
+  - `[ ]` Connect `frontend/src/pages/Queue.jsx` to fetch pending drafts on mount
+  - `[ ]` Wire "Approve & Send" and "Reject" actions to backend PATCH endpoints
+  - `[ ]` Verify draft approval sends emails (mocked) and transitions draft/invoice status, updating the UI dynamically (Milestone 4 complete)
+- `[ ]` **Milestone 5: Polishing, Empty States, and Error Handling**
+  - `[ ]` Add comprehensive loading skeletons and error notices across pages
+  - `[ ]` Polish layout and queue empty state
+  - `[ ]` Document the stretch goal for OCR upload and any required backend API routes

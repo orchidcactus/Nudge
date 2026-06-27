@@ -1,0 +1,84 @@
+# Implementation Plan - Connecting React Frontend to FastAPI Backend
+
+This plan details the integration of the **Nudge** React frontend with its FastAPI backend, ensuring a seamless end-to-end user workflow.
+
+## User Review Required
+
+### Backend Mismatches Discovered & Proposed Changes
+
+1. **Missing GET Invoices Route**:
+   The FastAPI backend (`main.py`) does not define a `GET /invoices` route. The React dashboard needs to list all invoices stored in the SQLite database.
+   - *Proposal*: Add a simple `@app.get("/invoices")` route returning a list of `schemas.InvoiceResponse`.
+2. **Missing CORS Configuration**:
+   The backend does not configure Cross-Origin Resource Sharing (CORS). Communication from the React development server (running on `http://localhost:5173`) to the FastAPI backend (running on `http://localhost:8000`) will be blocked by browsers.
+   - *Proposal*: Add `CORSMiddleware` in `backend/main.py` allowing cross-origin requests from the React dev server.
+3. **Broken Backend Tests (`test_workflow.py`)**:
+   Running `python -m unittest test_workflow.py` fails because `MagicMock` is only imported inside `if __name__ == "__main__":`. When run via the standard `unittest` CLI, this block is not executed, causing `NameError: name 'MagicMock' is not defined`.
+   - *Proposal*: Move the `MagicMock` import to the top of `test_workflow.py`.
+
+## Proposed Changes
+
+### Backend Component
+
+---
+
+#### [MODIFY] [main.py](file:///c:/Users/sengg/Documents/maitri/Nudge/backend/main.py)
+* Add `CORSMiddleware` configured to allow traffic from `http://localhost:5173` (React frontend).
+* Add a `GET /invoices` endpoint that queries and returns all `Invoice` database entries sorted by creation date.
+
+#### [MODIFY] [test_workflow.py](file:///c:/Users/sengg/Documents/maitri/Nudge/backend/test_workflow.py)
+* Move `from unittest.mock import MagicMock` to the top level of imports to fix test runner failures.
+
+### Frontend Component
+
+---
+
+#### [NEW] [.env](file:///c:/Users/sengg/Documents/maitri/Nudge/frontend/.env)
+* Define `VITE_API_URL=http://localhost:8000` to direct frontend API requests to the local backend port.
+
+#### [NEW] [api.ts](file:///c:/Users/sengg/Documents/maitri/Nudge/frontend/src/services/api.ts)
+* Create a simple native `fetch()` wrapper.
+* Automatically append `VITE_API_URL`.
+* Set default headers (e.g., `Content-Type: application/json`).
+* Handle JSON response parsing.
+* Implement error throwing for non-2xx statuses with descriptive error messages.
+
+#### [NEW] [invoices.ts](file:///c:/Users/sengg/Documents/maitri/Nudge/frontend/src/services/invoices.ts)
+* `getInvoices()`: Fetch the list of invoices.
+* `createInvoice(data)`: POST new invoice details.
+* `runPipeline(invoiceId)`: POST request to run pipeline processing for a specific invoice.
+* `uploadOCR(file)`: POST receipt file for OCR scanning (stretch goal mock endpoint).
+
+#### [NEW] [emails.ts](file:///c:/Users/sengg/Documents/maitri/Nudge/frontend/src/services/emails.ts)
+* `getPendingDrafts()`: Fetch email drafts with status `pending`.
+* `approveDraft(draftId)`: Approve and send a draft.
+* `rejectDraft(draftId)`: Reject a draft.
+
+#### [MODIFY] [Dashboard.jsx](file:///c:/Users/sengg/Documents/maitri/Nudge/frontend/src/pages/Dashboard.jsx)
+* Call `getInvoices()` on mount and handle loading/error states.
+* Implement a modern modal form for "New Invoice" using the app's existing theme and styling:
+  * Inputs: Customer Name, Amount, Due Date, Days Overdue.
+  * Clicking "Create" calls `createInvoice(data)`, updates the local invoice list, and closes the modal.
+* Add a "Run Pipeline" button in the action/status column for invoices with a `pending` status.
+  * Clicking this calls `runPipeline(id)` and updates the invoice status to `processed`.
+
+#### [MODIFY] [Queue.jsx](file:///c:/Users/sengg/Documents/maitri/Nudge/frontend/src/pages/Queue.jsx)
+* Call `getPendingDrafts()` on mount and handle loading/error states.
+* Implement active draft approvals calling `approveDraft(id)`.
+* Implement draft rejections calling `rejectDraft(id)`.
+* Update queue list state dynamically on success; show the "All caught up" clean slate if empty.
+
+#### [MODIFY] [Upload.jsx](file:///c:/Users/sengg/Documents/maitri/Nudge/frontend/src/pages/Upload.jsx)
+* Implement upload logic that takes a file input, sends it to the `/ocr/upload` API endpoint, handles loading state, and displays the success or error message.
+
+## Verification Plan
+
+### Automated Tests
+- Run `python -m unittest test_workflow.py` to verify backend pipeline logic.
+
+### Manual Verification
+- Start the FastAPI backend and verify it initializes tables in `nudge.db`.
+- Start the React frontend Vite development server.
+- Test "New Invoice" modal form submission and verify the invoice is added to the backend SQLite database and shown in the dashboard table.
+- Test the "Run Pipeline" action for a pending invoice and verify status changes to `processed`.
+- Test the "Review Queue" page, verifying that the generated draft appears, and can be approved/sent or rejected, transitioning the status correctly.
