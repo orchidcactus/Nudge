@@ -1,4 +1,3 @@
-import React from 'react';
 
 const severityColors = {
   LOW: 'bg-success/20 text-success border border-success/30',

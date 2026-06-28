@@ -1,4 +1,3 @@
-import React from 'react';
 
 export default function Button({ children, variant = 'primary', className = '', ...props }) {
   const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed active:scale-95";
